@@ -1,0 +1,43 @@
+@* c:\Users\poquettej\VSCode\db-final-proj\Components\HomeGameCard.razor *@
+@inject NavigationManager Navigation
+
+<div class="home-game-card" @onclick="NavigateToGameDetail">
+    <div class="home-game-cover-wrapper">
+        @if (!string.IsNullOrEmpty(Game.CoverUrl))
+        {
+            <img src="@Game.CoverUrl" alt="@Game.GameTitle" class="home-game-cover" />
+        }
+        else
+        {
+            <div class="home-game-cover-placeholder">No Cover</div>
+        }
+        <div class="home-game-overlay">
+            <h3 class="home-game-overlay-title">@Game.GameTitle</h3>
+            @if (!string.IsNullOrEmpty(Game.GameSummary))
+            {
+                <p class="home-game-overlay-summary">@Game.GameSummary</p>
+            }
+            @if (Game.Reviews != null && Game.Reviews.Any())
+            {
+                <div class="home-game-overlay-rating">
+                    <span class="bi bi-star-fill"></span> @Game.Reviews.Average(r => r.Rating).ToString("F1")/10
+                </div>
+            }
+            else
+            {
+                <div class="home-game-overlay-rating no-rating">No reviews yet</div>
+            }
+        </div>
+    </div>
+    <h2 class="home-game-title">@Game.GameTitle</h2>
+</div>
+
+@code {
+    [Parameter]
+    public Game Game { get; set; } = default!;
+
+    private void NavigateToGameDetail()
+    {
+        Navigation.NavigateTo($"/game/{Game.GameId}");
+    }
+}

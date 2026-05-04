@@ -1,0 +1,167 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject GameService GameService
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@using System.Security.Claims
+
+<PageTitle>Home</PageTitle>
+
+<div class="homepage-container">
+    <h1 class="homepage-welcome-title">Welcome to GameDB!</h1>
+
+    <div class="game-carousel-section">
+        <h2 class="game-carousel-header">Explore Our Database</h2>
+        @if (isLoading && databaseGames.Count == 0)
+        {
+            <div class="loading-section">Loading games from our database...</div>
+        }
+        else if (databaseGames.Any())
+        {
+            <div class="carousel-wrapper">
+                <button class="carousel-nav-btn me-3" @onclick='() => ScrollCarousel("explore-carousel", -500)'>
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+
+                <div class="game-carousel-grid" id="explore-carousel">
+                    @foreach (var game in databaseGames)
+                    {
+                        <HomeGameCard Game="game" />
+                    }
+                    
+                    @if (hasMore)
+                    {
+                        <div class="load-more-card" @onclick="LoadMore">
+                            @if (isLoadingMore)
+                            {
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                            }
+                            else
+                            {
+                                <i class="bi bi-plus-circle"></i>
+                                <span>Load More</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <button class="carousel-nav-btn ms-3" @onclick='() => ScrollCarousel("explore-carousel", 500)'>
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        }
+        else if (!isLoading)
+        {
+            <div class="empty-section">No games found in our database.</div>
+        }
+    </div>
+
+    @if (currentUserId.HasValue)
+    {
+        <div class="game-carousel-section">
+            <h2 class="game-carousel-header">Your Bookmarked Games</h2>
+            @if (isLoadingBookmarks)
+            {
+                <div class="loading-section">Loading your bookmarks...</div>
+            }
+            else if (bookmarkedGames.Any())
+            {
+                <div class="carousel-wrapper">
+                    <button class="carousel-nav-btn me-3" @onclick='() => ScrollCarousel("bookmarks-carousel", -500)'>
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    <div class="game-carousel-grid" id="bookmarks-carousel">
+                        @foreach (var game in bookmarkedGames)
+                        {
+                            <HomeGameCard Game="game" />
+                        }
+                    </div>
+
+                    <button class="carousel-nav-btn ms-3" @onclick='() => ScrollCarousel("bookmarks-carousel", 500)'>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="empty-section">You haven't bookmarked any games yet.</div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    private int? currentUserId;
+    private List<Game> bookmarkedGames = new();
+    private List<Game> databaseGames = new();
+    private bool isLoadingBookmarks = true;
+    private bool isLoading = true;
+    private bool isLoadingMore = false;
+    private bool hasMore = true;
+    private int currentOffset = 0;
+    private const int PAGE_SIZE = 12;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var id))
+                {
+                    currentUserId = id;
+                    await LoadBookmarkedGames();
+                }
+            }
+        }
+        isLoadingBookmarks = false;
+        await LoadDatabaseGames();
+    }
+
+    private async Task LoadBookmarkedGames()
+    {
+        isLoadingBookmarks = true;
+        if (currentUserId.HasValue)
+        {
+            bookmarkedGames = await GameService.GetBookmarkedGamesAsync(currentUserId.Value);
+        }
+        isLoadingBookmarks = false;
+    }
+
+    private async Task LoadDatabaseGames()
+    {
+        isLoading = true;
+        var results = await GameService.GetDatabaseGamesAsync(currentOffset, PAGE_SIZE);
+        databaseGames.AddRange(results);
+        hasMore = results.Count >= PAGE_SIZE;
+        currentOffset += results.Count;
+        isLoading = false;
+    }
+
+    private async Task LoadMore()
+    {
+        if (isLoadingMore || !hasMore)
+            return;
+
+        isLoadingMore = true;
+        var results = await GameService.GetDatabaseGamesAsync(currentOffset, PAGE_SIZE);
+        databaseGames.AddRange(results);
+        hasMore = results.Count >= PAGE_SIZE;
+        currentOffset += results.Count;
+        isLoadingMore = false;
+    }
+
+    private async Task ScrollCarousel(string carouselId, int distance)
+    {
+        await JS.InvokeVoidAsync("eval", $"document.getElementById('{carouselId}').scrollBy({{ left: {distance}, behavior: 'smooth' }})");
+    }
+}

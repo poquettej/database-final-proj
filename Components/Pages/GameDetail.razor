@@ -1,0 +1,325 @@
+@page "/game/{GameId:int}"
+@rendermode InteractiveServer
+@inject GameService GameService
+@inject NavigationManager Navigation
+@using System.Security.Claims
+@inject ModalService ModalService
+
+<PageTitle>@(game?.GameTitle ?? "Game Details")</PageTitle>
+
+<div class="game-detail-container">
+    @if (isLoading)
+    {
+        <div class="loading">Loading game details...</div>
+    }
+    else if (game == null)
+    {
+        <div class="no-results">Game not found.</div>
+    }
+    else
+    {
+        <div class="detail-header">
+            <button class="back-button" @onclick="GoBack">← Back to Search</button>
+        </div>
+
+        <div class="detail-content">
+            <!-- Cover and Basic Info -->
+            <div class="detail-hero">
+                <div class="detail-cover">
+                    @if (!string.IsNullOrEmpty(game.CoverUrl))
+                    {
+                        <img src="@game.CoverUrl" alt="@game.GameTitle" />
+                    }
+                    else
+                    {
+                        <div class="cover-placeholder">No Cover</div>
+                    }
+                </div>
+
+                <div class="detail-info">
+                    <h1 class="detail-title">@game.GameTitle</h1>
+                    
+                    @if (game.ReleaseDate.HasValue)
+                    {
+                        <p class="detail-release">Released: <strong>@game.ReleaseDate.Value.ToString("MMMM d, yyyy")</strong></p>
+                    }
+
+
+                    <div class="detail-platforms">
+                        @if (game.SupportedPlatforms.Any())
+                        {
+                            <p class="platforms-label">Platforms:</p>
+                            <div class="platforms-list">
+                                @foreach (var sp in game.SupportedPlatforms)
+                                {
+                                    <span class="platform-badge">@sp.Platform?.PlatformName</span>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <button class="bookmark-button @(isBookmarked ? "bookmarked" : "")" @onclick="HandleBookmarkClick">
+                        @if (isBookmarked)
+                        {
+                            <span class="bi bi-check-lg" aria-hidden="true"></span> <span>Bookmarked</span>
+                        }
+                        else
+                        {
+                            <span class="bi bi-bookmark" aria-hidden="true"></span> <span>Bookmark</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            @if (!string.IsNullOrEmpty(game.GameSummary))
+            {
+                <div class="detail-section">
+                    <h2>Summary</h2>
+                    <p class="detail-summary">@game.GameSummary</p>
+                </div>
+            }
+
+            <!-- Companies -->
+            @if (game.InvolvedCompanies.Any())
+            {
+                <div class="detail-section">
+                    <h2>Companies</h2>
+                    <div class="companies-grid">
+                        @foreach (var involvement in game.InvolvedCompanies)
+                        {
+                            <div class="company-card">
+                                <h4>@involvement.Company?.CompanyName</h4>
+                                <div class="company-roles">
+                                    @if (involvement.IsDeveloper)
+                                    {
+                                        <span class="role-badge developer">Developer</span>
+                                    }
+                                    @if (involvement.IsPublisher)
+                                    {
+                                        <span class="role-badge publisher">Publisher</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Websites -->
+            @if (game.Websites.Any())
+            {
+                <div class="detail-section">
+                    <h2>Links</h2>
+                    <div class="websites-list">
+                        @foreach (var website in game.Websites)
+                        {
+                            <a href="@website.WebsiteUrl" target="_blank" class="website-link">
+                                🔗 @GetWebsiteName(website.WebsiteUrl)
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Reviews Section -->
+            <div class="detail-section">
+                <h2>Reviews</h2>
+                
+                <div class="review-form mb-5">
+                    <h4 class="text-light mb-4">Leave a Review</h4>
+                    <div class="row g-3">
+                        <div class="col-12 mb-2">
+                            <label class="form-label d-block">Rating (1-10)</label>
+                            <div class="star-rating">
+                                @for (int i = 1; i <= 10; i++)
+                                {
+                                    int starValue = i;
+                                    <i class="bi bi-star-fill @(userRating >= starValue ? "active" : "")" @onclick="() => userRating = starValue"></i>
+                                }
+                                <span class="ms-3 small text-light">@userRating / 10</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Comment (Optional)</label>
+                            <textarea class="form-control theme-input" rows="3" @bind="userComment" placeholder="What did you think of the game?"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn search-button" @onclick="HandleReviewSubmit">Submit Review</button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (game.Reviews?.Any() == true)
+                {
+                    <div class="reviews-list">
+                        @foreach (var review in game.Reviews.OrderByDescending(r => r.DateReviewed))
+                        {
+                            <div class="review-item p-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="review-user">
+                                        <span class="bi bi-person-circle me-2"></span>
+                                        <strong>@review.User?.Username</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="review-rating-badge">
+                                            <span class="bi bi-star-fill text-warning me-1"></span>
+                                            @review.Rating/10
+                                        </div>
+                                        @if (review.UserId == currentUserId)
+                                        {
+                                            <button class="btn-delete-review" title="Delete Review" @onclick="() => HandleReviewDelete(review.ReviewId)">
+                                                <i class="bi bi-trash3-fill"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(review.ReviewComment))
+                                {
+                                    <p class="review-comment mb-0">@review.ReviewComment</p>
+                                }
+                                <div class="review-date mt-2 small text-muted">
+                                    @review.DateReviewed?.ToString("MMM dd, yyyy")
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="placeholder-text">No reviews yet. Be the first to review!</p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int GameId { get; set; }
+
+    private Game? game;
+    private bool isLoading = true;
+    private bool isBookmarked = false;
+    private int? currentUserId;
+    private int userRating = 10;
+    private string userComment = string.Empty;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        game = await GameService.GetGameByIdAsync(GameId);
+        isLoading = false;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthStateTask != null)
+        {
+            var authState = await AuthStateTask;
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var id))
+                {
+                    currentUserId = id;
+                    isBookmarked = await GameService.IsGameBookmarkedAsync(id, GameId);
+                }
+            }
+        }
+    }
+
+    private async Task HandleBookmarkClick()
+    {
+        if (currentUserId == null)
+        {
+            ModalService.ShowLogin();
+            return;
+        }
+        
+        await ToggleBookmark();
+    }
+
+    private async Task HandleReviewSubmit()
+    {
+        if (currentUserId == null)
+        {
+            ModalService.ShowLogin();
+            return;
+        }
+
+        try 
+        {
+            await GameService.AddReviewAsync(currentUserId.Value, GameId, userRating, userComment);
+            userComment = string.Empty;
+            // Refresh game data to show new review
+            game = await GameService.GetGameByIdAsync(GameId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting review: {ex.Message}");
+        }
+    }
+
+    private async Task HandleReviewDelete(int reviewId)
+    {
+        if (currentUserId == null) return;
+
+        try
+        {
+            await GameService.RemoveReviewAsync(reviewId);
+            // Refresh data
+            game = await GameService.GetGameByIdAsync(GameId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting review: {ex.Message}");
+        }
+    }
+
+    private async Task ToggleBookmark()
+    {
+        if (currentUserId == null) return;
+
+        if (isBookmarked)
+        {
+            await GameService.RemoveBookmarkAsync(currentUserId.Value, GameId);
+            isBookmarked = false;
+        }
+        else
+        {
+            await GameService.AddBookmarkAsync(currentUserId.Value, GameId);
+            isBookmarked = true;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/search");
+    }
+
+    private string GetWebsiteName(string url)
+    {
+        try
+        {
+            var uri = new Uri(url);
+            var host = uri.Host.Replace("www.", "");
+            var parts = host.Split('.');
+            if (parts.Length >= 2)
+            {
+                return parts[^2];
+            }
+            return host;
+        }
+        catch
+        {
+            return "Link";
+        }
+    }
+}

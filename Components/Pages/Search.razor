@@ -1,0 +1,124 @@
+@page "/search"
+@rendermode InteractiveServer
+@inject GameService GameService
+
+<PageTitle>Search Games</PageTitle>
+
+<div class="search-container">
+    <div class="search-header">
+        <h1>Search Games</h1>
+        <div class="search-bar-wrapper">
+            <input 
+                type="text" 
+                class="search-bar" 
+                placeholder="Search for games..."
+                @bind="searchQuery"
+                @onkeyup="HandleSearch"
+            />
+            <button class="search-button" @onclick="PerformSearch">Search</button>
+        </div>
+    </div>
+
+    <div class="results-container">
+        @if (isLoading && games.Count == 0)
+        {
+            <div class="loading">Searching...</div>
+        }
+        else if (searchPerformed && games.Count == 0)
+        {
+            <div class="no-results">No games found. Try a different search.</div>
+        }
+        else if (games.Count > 0)
+        {
+            <div class="games-grid">
+                @foreach (var game in games)
+                {
+                    <GameCard Game="game" />
+                }
+            </div>
+
+            @if (hasMoreResults || isLoadingMore)
+            {
+                <div class="load-more-section">
+                    @if (isLoadingMore)
+                    {
+                        <div class="loading">Loading more...</div>
+                    }
+                    else
+                    {
+                        <button class="load-more-button" @onclick="LoadMore">Load More Results</button>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private string searchQuery = string.Empty;
+    private string lastSearched = string.Empty;
+    private List<Game> games = new();
+    private bool isLoading = false;
+    private bool isLoadingMore = false;
+    private bool searchPerformed = false;
+    private bool hasMoreResults = false;
+    private int currentOffset = 0;
+    private const int PAGE_SIZE = 10;
+
+    private async Task PerformSearch()
+    {
+        lastSearched = searchQuery;
+        if (string.IsNullOrWhiteSpace(lastSearched))
+            return;
+
+        isLoading = true;
+        searchPerformed = true;
+        games.Clear(); // Clear previous search
+        currentOffset = 0;
+        hasMoreResults = false;
+
+        var excludeIds = games.Select(g => g.GameId).ToList();
+        var results = await GameService.SearchGamesAsync(lastSearched, currentOffset, PAGE_SIZE, excludeIds);
+        games = results;
+
+        // There's still more results left potentially, we can try and load more
+        hasMoreResults = results.Count >= PAGE_SIZE;
+        Console.WriteLine($"Search returned {results.Count} results. Has more: {hasMoreResults}");
+        currentOffset += results.Count;
+
+        isLoading = false;
+        var firstGame = games.FirstOrDefault();
+        if (firstGame != null)
+        {
+            Console.WriteLine($"First result: Title: {firstGame.GameTitle}, CoverURL: {firstGame.CoverUrl}, Summary: {firstGame.GameSummary} (ID: {firstGame.GameId})");
+        }
+    }
+
+    private async Task LoadMore()
+    {
+        if (string.IsNullOrWhiteSpace(lastSearched) || isLoadingMore)
+            return;
+
+        isLoadingMore = true;
+        Console.WriteLine($"Loading more results with offset {currentOffset}...");
+        var excludeIds = games.Select(g => g.GameId).ToList();
+        var results = await GameService.SearchGamesAsync(lastSearched, currentOffset, PAGE_SIZE, excludeIds);
+        games.AddRange(results);
+        Console.WriteLine($"Load more returned {results.Count} results.");
+        // If we got fewer than PAGE_SIZE results, there are no more
+        hasMoreResults = results.Count >= PAGE_SIZE;
+        Console.WriteLine($"Has more after load more: {hasMoreResults}");
+        // Increment offset by actual count returned
+        currentOffset += results.Count;
+
+        isLoadingMore = false;
+    }
+
+    private async Task HandleSearch(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PerformSearch();
+        }
+    }
+}

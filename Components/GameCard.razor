@@ -1,0 +1,44 @@
+@using db_final_proj.Models
+
+<a href="/game/@Game?.GameId" class="game-card-link">
+    <div class="game-card">
+        <div class="card-left">
+            @if (!string.IsNullOrEmpty(Game?.CoverUrl))
+            {
+                <img src="@Game.CoverUrl" alt="@Game.GameTitle" class="game-cover" />
+            }
+            else
+            {
+                <div class="game-cover-placeholder">No Cover</div>
+            }
+        </div>
+
+        <div class="card-content">
+            <h3 class="game-title">@Game?.GameTitle</h3>
+            <p class="game-summary">@Game?.GameSummary</p>
+        </div>
+
+        <div class="card-right">
+            <div class="rating-section">
+                @if (false)
+                @* @if (Game?.Rating.HasValue == true) *@
+                {
+                    @* <div class="game-rating">@Game.Rating.Value.ToString("F1")</div>
+                    @if (Game?.RatingCount.HasValue == true)
+                    {
+                        <div class="rating-count">@Game.RatingCount.Value ratings</div>
+                    } *@
+                }
+                else
+                {
+                    <div class="no-rating">No Rating</div>
+                }
+            </div>
+        </div>
+    </div>
+</a>
+
+@code {
+    [Parameter]
+    public Game? Game { get; set; }
+}

@@ -1,0 +1,144 @@
+@using db_final_proj.Services
+@rendermode InteractiveServer
+@inject AuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ModalService ModalService
+@implements IDisposable
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage ProtectedLocalStore
+
+@if (isVisible)
+{
+    <div class="modal fade show" style="display:block; background: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered theme-modal">
+            <div class="modal-content custom-modal-content">
+                <div class="modal-header border-bottom-theme">
+                    <h5 class="modal-title text-white">@(isRegisterMode ? "Create Account" : "Sign In")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    <div class="mb-3 theme-form-group">
+                        <label class="form-label text-light">Username</label>
+                        <input type="text" class="form-control theme-input" @bind="username" @onkeyup="HandleKeyUp" disabled="@isSubmitting" placeholder="Enter username" />
+                    </div>
+
+                    @if (isRegisterMode)
+                    {
+                        <div class="mb-3 theme-form-group">
+                            <label class="form-label text-light">Email</label>
+                            <input type="email" class="form-control theme-input" @bind="email" @onkeyup="HandleKeyUp" disabled="@isSubmitting" placeholder="email@example.com" />
+                        </div>
+                    }
+
+                    <div class="mb-3 theme-form-group">
+                        <label class="form-label text-light">Password</label>
+                        <input type="password" class="form-control theme-input" @bind="password" @onkeyup="HandleKeyUp" disabled="@isSubmitting" placeholder="••••••••" />
+                    </div>
+                </div>
+                <div class="modal-footer border-top-theme">
+                    <button class="btn btn-link theme-link" @onclick="ToggleMode" disabled="@isSubmitting">
+                        @(isRegisterMode ? "Already have an account? Login" : "Need an account? Register")
+                    </button>
+                    <button class="btn theme-button" @onclick="HandleSubmit" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            @(isRegisterMode ? "Register" : "Login")
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isRegisterMode = false;
+    private bool isSubmitting = false;
+    private bool isVisible = false;
+    private string username = "";
+    private string email = "";
+    private string password = "";
+    private string errorMessage = "";
+
+    private void ToggleMode() => isRegisterMode = !isRegisterMode;
+
+    protected override void OnInitialized()
+    {
+        ModalService.OnShowLogin += HandleShowLogin;
+    }
+
+    private void HandleShowLogin()
+    {
+        isVisible = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task Close()
+    {
+        isVisible = false;
+        username = string.Empty;
+        email = string.Empty;
+        password = string.Empty;
+        errorMessage = "";
+        isRegisterMode = false; // Reset to login mode
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleSubmit();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (isSubmitting) return;
+
+        isSubmitting = true;
+        errorMessage = "";
+        
+        try 
+        {
+            if (isRegisterMode)
+            {
+                var result = await AuthService.RegisterAsync(username, email, password);
+                if (result.Success) await LoginUser(result.User!);
+                else errorMessage = result.Message;
+            }
+            else
+            {
+                var result = await AuthService.LoginAsync(username, password);
+                if (result.Success) await LoginUser(result.User!);
+                else errorMessage = result.Message;
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task LoginUser(Models.User user)
+    {
+        // Securely store the user info in the browser (encrypted by the server)
+        await ProtectedLocalStore.SetAsync("UserSession", user);
+        
+        ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsAuthenticated(user);
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+
+    public void Dispose() => ModalService.OnShowLogin -= HandleShowLogin;
+}

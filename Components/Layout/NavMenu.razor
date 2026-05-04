@@ -1,0 +1,70 @@
+﻿@inject AuthenticationStateProvider AuthStateProvider
+@inject ModalService ModalService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@using db_final_proj.Services
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage ProtectedLocalStore
+
+<div class="top-row navbar navbar-dark custom-nav-header">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">GameDB</a>
+    </div>
+</div>
+
+<div class="sidebar-divider"></div>
+
+<div class="nav-scrollable">
+    <nav class="nav flex-column">
+        <div class="sidebar-section">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="sidebar-card p-3">
+                        <div class="account-header">Account</div>
+                        <div class="username-display text-truncate">@context.User.Identity?.Name</div>
+                        <button class="logout-action" @onclick="Logout">
+                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
+                        </button>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <div class="sidebar-card p-3">
+                        <button class="login-button-trigger w-100" @onclick="ShowLogin">
+                            <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Sign In
+                        </button>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section">
+            <div class="sidebar-card p-2">
+                <div class="account-header px-2 pt-1">Explore</div>
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                    </NavLink>
+                </div>
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="search">
+                        <span class="bi bi-search-nav-menu" aria-hidden="true"></span> Search
+                    </NavLink>
+                </div>
+            </div>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private void ShowLogin()
+    {
+        ModalService.ShowLogin();
+    }
+
+    private async Task Logout()
+    {
+        await ProtectedLocalStore.DeleteAsync("UserSession");
+        ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+}
